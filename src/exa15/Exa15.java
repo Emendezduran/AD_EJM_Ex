@@ -62,14 +62,18 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map.Entry;
 import javax.xml.stream.XMLOutputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
 
 public class Exa15 {
+    
     public static Connection conexion=null;
-
+    static File txt = new File("/home/oracle/Desktop/compartido/Exa15/ExExameAD/platoss");
+    
     public static Connection getConexion() throws SQLException  {
         String usuario = "hr";
         String password = "hr";
@@ -82,34 +86,14 @@ public class Exa15 {
             conexion = DriverManager.getConnection(ulrjdbc);
             return conexion;
         }
-
      
      public static void closeConexion() throws SQLException {
       conexion.close();
       }
      
-     public static String getComponente(String codp) throws SQLException{
-         String sql = "Select codc from componentes where codp='"+codp+"'";
-         String componente = "";
-         //conexion
-            Connection conn = getConexion();
-            //intermediario
-            Statement statement = conn.createStatement();
-            //resultados
-            ResultSet rs = statement.executeQuery(sql);
-            while (rs.next()) {
-                componente = "Codigo de Componente: " + rs.getNString("codc");
-            }
-        return componente;
-     }     
-     
-    public static void main(String[] args) throws FileNotFoundException, IOException, SQLException, ClassNotFoundException, XMLStreamException {
-       
-        File txt = new File("/home/oracle/Desktop/compartido/Exa15/ExExameAD/platoss"); 
-        ObjectInputStream read;
-        
-        ArrayList<Platos> platosLeidos = new ArrayList<>();
-
+     public static ArrayList<Platos> leerPlatos(File txt){
+        ArrayList<Platos> platosLeidos = new ArrayList<>(); 
+        ObjectInputStream read;  
         try {
             read = new ObjectInputStream(new BufferedInputStream(new FileInputStream(txt)));
             while (true) {
@@ -123,15 +107,110 @@ public class Exa15 {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
+        return platosLeidos;
+     } 
+     
+     public static HashMap<String, Integer> SelectComposicion(String codp) throws SQLException{
+         String sql = "Select * from composicion where codp='"+codp+"'";
+        HashMap<String, Integer> composicion = new HashMap<>();
+         //conexion
+            Connection conn = getConexion();
+            //intermediario
+            Statement statement = conn.createStatement();
+            //resultados
+            ResultSet rs = statement.executeQuery(sql);
+            while (rs.next()) {
+                composicion.put(rs.getNString("codc"), Integer.parseInt(rs.getNString("peso")));  
+            }
+        return composicion;
+     }
 
-        for (int i = 0; i < platosLeidos.size(); i++) {
-            System.out.println(platosLeidos.get(i).toString());
-            System.out.println(platosLeidos.get(i).getCodigop());
-        }
-        
-        
-        
+     public static Integer SelectGrasa(String codc) throws SQLException{
+         String sql = "Select graxa from componentes where codc='"+codc+"'";
+        int grasa = 0;
+         //conexion
+            Connection conn = getConexion();
+            //intermediario
+            Statement statement = conn.createStatement();
+            //resultados
+            ResultSet rs = statement.executeQuery(sql);
+            while (rs.next()) {
+                grasa = Integer.parseInt(rs.getNString("graxa"));  
+            }
+        return grasa;
+     }
 
+     public static Integer CalcularContenido(int peso, int grasa){
+         int contGrasa = peso/100 * grasa;
+        return contGrasa;
+     }
+     
+     public static void EscribirXML() throws IOException, SQLException{
+         
+        File xml = new File("/home/oracle/Desktop/compartido/Exa15/ExExameAD/platos.xml");
+        
+        try {
+            XMLStreamWriter xmlSW = XMLOutputFactory.newInstance().createXMLStreamWriter(new FileWriter(xml));
+
+            //VersionXML DeclaracionInicial
+            xmlSW.writeStartDocument("1.0");
+
+            //EtiquetaRaizApertura
+            //<platos>
+            xmlSW.writeStartElement("platos");
+
+             for (Platos plato : leerPlatos(txt)){
+
+                //<plato codigop="cod">
+                xmlSW.writeStartElement("plato");
+                xmlSW.writeAttribute("codigop", plato.getCodigop());
+
+                //<nomep>
+                xmlSW.writeStartElement("nomep");
+                xmlSW.writeCharacters(plato.getNomep());
+                //</nomep>
+                xmlSW.writeEndElement();
+                
+                int totalGrasa = 0;
+                for (Entry<String,Integer> entry : SelectComposicion(plato.getCodigop()).entrySet()) {
+                  totalGrasa += CalcularContenido(entry.getValue(), SelectGrasa(entry.getKey()));       
+                 }
+                //<graxaTotal>
+                xmlSW.writeStartElement("graxaTotal");
+                xmlSW.writeCharacters(Integer.toString(totalGrasa));
+                //</graxaTotal>
+                xmlSW.writeEndElement();
+                
+                //</plato>
+                xmlSW.writeEndElement();
+            }
+
+            //EtiquetaRaizCierre
+            //</platos>
+            xmlSW.writeEndElement();
+            xmlSW.close();
+        } catch (XMLStreamException ex) {
+            ex.printStackTrace();
+        } 
+     }
+     
+    public static void main(String[] args) throws FileNotFoundException, IOException, SQLException, ClassNotFoundException, XMLStreamException {
+    
+    for (Platos plato : leerPlatos(txt)){
+        System.out.println("CODIGO DO PLATO : " +plato.getCodigop()+ "\n" +
+                           "nome do plato : " +plato.getNomep());
+        int totalGrasa = 0;
+     for (Entry<String,Integer> entry : SelectComposicion(plato.getCodigop()).entrySet()) {
+         System.out.println("codigo do componente : "+entry.getKey()+"-> graxa por cada 100 gr= "+SelectGrasa(entry.getKey())+"\n" +
+                            "peso : "+entry.getValue()+"\n" +
+                            "total de graxa do componente = " + CalcularContenido(entry.getValue(), SelectGrasa(entry.getKey())) + "\n");
+        totalGrasa += CalcularContenido(entry.getValue(), SelectGrasa(entry.getKey()));       
+     }
+        System.out.println("TOTAL EN GRAXAS DO PLATO:" + totalGrasa + "\n");
+    }
+    
+    EscribirXML();
+    closeConexion();       
     }
 }
       
